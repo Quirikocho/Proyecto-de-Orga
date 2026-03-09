@@ -1,3 +1,4 @@
+#Primero se aplican todas las macros
 .macro imprimir_str(%label) # Macro para imprimir una cadena de caracteres
     li $v0, 4
     la $a0, %label
@@ -43,21 +44,21 @@ fin_macro:
     # %reg_res_frac: Registro donde guardaremos los 8 bits
     
     li %reg_res_frac, 0       # Limpiar el resultado
-    li $t2, 0                 # Contador de bits (máximo 8)
+    li $t2, 0                 # Contador de bits (mï¿½ximo 8)
     li $t3, 10                # Constante para multiplicar/dividir
     
-    # PASO 1: Convertir el string de la fracción a un entero
+    # PASO 1: Convertir el string de la fracciï¿½n a un entero
     # Ej: de ".75" a 75
     li $t4, 0                 # Valor acumulado
     li $t5, 1                 # Multiplicador (potencia de 10) para el divisor
 loop_ascii:
     lbu $t0, 0(%ptr_reg)
     beq $t0, $zero, iniciar_multiplicacion # Fin de cadena
-    beq $t0, 10, iniciar_multiplicacion    # Salto de línea (\n)
+    beq $t0, 10, iniciar_multiplicacion    # Salto de lï¿½nea (\n)
     
-    subi $t0, $t0, 48         # Convertir ASCII a número
+    subi $t0, $t0, 48         # Convertir ASCII a nï¿½mero
     mul $t4, $t4, 10          # Desplazar decimal
-    add $t4, $t4, $t0         # Sumar dígito
+    add $t4, $t4, $t0         # Sumar dï¿½gito
     mul $t5, $t5, 10          # Aumentar el divisor (10, 100, 1000...)
     
     addi %ptr_reg, %ptr_reg, 1
@@ -96,7 +97,7 @@ loop_bin:
     andi $a0, $t7, 1    # Aislar el bit actual
     addi $a0, $a0, 48   # Convertir 0 o 1 a su ASCII ('0' o '1')
     
-    li $v0, 11          # Syscall 11: Imprimir carácter [cite: 35]
+    li $v0, 11          # Syscall 11: Imprimir carï¿½cter [cite: 35]
     syscall
     
     subi $t6, $t6, 1
@@ -113,14 +114,14 @@ fin_m_bin:
 loop_hex:
     beqz $t6, fin_m_hex
     rol $t7, $t7, 4     # Rotar 4 bits a la izquierda
-    andi $t0, $t7, 0xF  # Máscara para obtener solo los 4 bits de la derecha
+    andi $t0, $t7, 0xF  # Mï¿½scara para obtener solo los 4 bits de la derecha
     
     ble $t0, 9, es_numero
     addi $t0, $t0, 7    # Ajuste para letras (A-F) en la tabla ASCII
 es_numero:
     addi $a0, $t0, 48   # Convertir a ASCII
     
-    li $v0, 11          # Syscall 11: Imprimir carácter
+    li $v0, 11          # Syscall 11: Imprimir carï¿½cter
     syscall
     
     subi $t6, $t6, 1
