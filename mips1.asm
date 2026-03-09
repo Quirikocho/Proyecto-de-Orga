@@ -26,7 +26,6 @@ main:
     imprimir_str(Mensaje1)
     leer_str(Buffer1, 20)
   
-
 #Muestra el mensaje 2/ Pide el formato destino
     imprimir_str(Mensaje2)
     leer_str(Buffer1, 20)
@@ -34,8 +33,7 @@ main:
    #Pedir el NÚMERO a convertir
     imprimir_str(Num1)
     leer_str(BufferCon, 64)
-    
-
+   
 #Lee el numero que vas a convertir
    
    #Muestra el resultado
