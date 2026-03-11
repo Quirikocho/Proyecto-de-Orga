@@ -1,11 +1,11 @@
-#Primero se aplican todas las macros
-.macro imprimir_str(%label) # Macro para imprimir una cadena de caracteres
+# macros
+.macro imprimir_str(%label) # macro para imprimir una cadena de caracteres
     li $v0, 4
     la $a0, %label
     syscall
 .end_macro
 
-.macro leer_str(%buffer, %size) # Macro para leer una cadena de caracteres (String)
+.macro leer_str(%buffer, %size) # macro para leer una cadena de caracteres (String)
     li $v0, 8
     la $a0, %buffer
     li $a1, %size 
@@ -14,28 +14,28 @@
 
 
 .macro m_ProcesarSigno(%ptr_reg, %signo_reg)
-    lbu $t0, 0(%ptr_reg)    # Cargar el primer byte
-    li %signo_reg, 0        # Por defecto es positivo (0)
+    lbu $t0, 0(%ptr_reg)    # cargar el primer byte
+    li %signo_reg, 0        # por defecto es positivo (0)
     
     li $t1, 45              # ASCII de '-'
     beq $t0, $t1, es_negativo
     
     li $t1, 43              # ASCII de '+'
     beq $t0, $t1, es_positivo
-    j fin_macro             # Si no hay signo, no avanzamos el puntero
+    j fin_macro             # si no hay signo, no avanzamos el puntero
     
 es_negativo:
-    li %signo_reg, 1        # Marcar como negativo
+    li %signo_reg, 1        # marcar como negativo
 es_positivo:
-    addi %ptr_reg, %ptr_reg, 1 # Avanzar el puntero para saltar el signo
+    addi %ptr_reg, %ptr_reg, 1 # avanzar el puntero para saltar el signo
     
 fin_macro:
 .end_macro
 
 
 .macro m_AplicarComplemento2(%reg_valor)
-    not %reg_valor, %reg_valor  # Invertir todos los bits (Bitwise NOT)
-    addi %reg_valor, %reg_valor, 1 # Sumar 1
+    not %reg_valor, %reg_valor  # invertir todos los bits (Bitwise NOT)
+    addi %reg_valor, %reg_valor, 1 # sumar 1
 .end_macro
 
 
@@ -43,23 +43,23 @@ fin_macro:
     # %ptr_reg: Puntero al string despues del '.'
     # %reg_res_frac: Registro donde guardaremos los 8 bits
     
-    li %reg_res_frac, 0       # Limpiar el resultado
-    li $t2, 0                 # Contador de bits (m�ximo 8)
-    li $t3, 10                # Constante para multiplicar/dividir
+    li %reg_res_frac, 0       # limpiar el resultado
+    li $t2, 0                 # contador de bits (maximo 8)
+    li $t3, 10                # constante para multiplicar/dividir
     
-    # PASO 1: Convertir el string de la fracci�n a un entero
+    # PASO 1: Convertir el string de la fraccion a un entero
     # Ej: de ".75" a 75
-    li $t4, 0                 # Valor acumulado
-    li $t5, 1                 # Multiplicador (potencia de 10) para el divisor
+    li $t4, 0                 # valor acumulado
+    li $t5, 1                 # multiplicador (potencia de 10) para el divisor
 loop_ascii:
     lbu $t0, 0(%ptr_reg)
-    beq $t0, $zero, iniciar_multiplicacion # Fin de cadena
-    beq $t0, 10, iniciar_multiplicacion    # Salto de l�nea (\n)
+    beq $t0, $zero, iniciar_multiplicacion # fin de cadena
+    beq $t0, 10, iniciar_multiplicacion    # salto de linea (\n)
     
-    subi $t0, $t0, 48         # Convertir ASCII a n�mero
-    mul $t4, $t4, 10          # Desplazar decimal
-    add $t4, $t4, $t0         # Sumar d�gito
-    mul $t5, $t5, 10          # Aumentar el divisor (10, 100, 1000...)
+    subi $t0, $t0, 48         # convertir ASCII a numero
+    mul $t4, $t4, 10          # desplazar decimal
+    add $t4, $t4, $t0         # sumar digito
+    mul $t5, $t5, 10          # aumentar el divisor (10, 100, 1000...)
     
     addi %ptr_reg, %ptr_reg, 1
     j loop_ascii
@@ -69,35 +69,35 @@ iniciar_multiplicacion:
     # t4 = valor fraccionario entero (75)
     # t5 = el divisor (100)
 loop_bits:
-    beq $t2, 8, fin_fraccion  # Detenerse al llegar a 8 bits 
+    beq $t2, 8, fin_fraccion  # detenerse al llegar a 8 bits 
     
-    sll %reg_res_frac, %reg_res_frac, 1 # Espacio para el nuevo bit
-    mul $t4, $t4, 2           # Multiplicar por 2
+    sll %reg_res_frac, %reg_res_frac, 1 # espacio para el nuevo bit
+    mul $t4, $t4, 2           # multiplicar por 2
     
-    blt $t4, $t5, bit_cero    # Si resultado < divisor, el bit es 0
+    blt $t4, $t5, bit_cero    # si resultado < divisor, el bit es 0
     
-    # Si resultado >= divisor, el bit es 1
+    # si resultado >= divisor, el bit es 1
     ori %reg_res_frac, %reg_res_frac, 1
-    sub $t4, $t4, $t5         # Restar el "entero" (el divisor)
+    sub $t4, $t4, $t5         # restar el "entero" (el divisor)
     
 bit_cero:
-    addi $t2, $t2, 1          # Incrementar contador de bits
+    addi $t2, $t2, 1          # incrementar contador de bits
     j loop_bits
 
 fin_fraccion:
 .end_macro
 
 .macro m_ImprimirBinario(%reg_datos)
-    li $t6, 32          # Contador para los 32 bits [cite: 18]
-    move $t7, %reg_datos # Copia para no destruir el original
+    li $t6, 32          # contador para los 32 bits [cite: 18]
+    move $t7, %reg_datos # copia para no destruir el original
     
 loop_bin:
     beqz $t6, fin_m_bin
-    rol $t7, $t7, 1     # Rotar a la izquierda para poner el bit MSB en el LSB
-    andi $a0, $t7, 1    # Aislar el bit actual
-    addi $a0, $a0, 48   # Convertir 0 o 1 a su ASCII ('0' o '1')
+    rol $t7, $t7, 1     # rotar a la izquierda para poner el bit MSB en el LSB
+    andi $a0, $t7, 1    # aislar el bit actual
+    addi $a0, $a0, 48   # convertir 0 o 1 a su ASCII ('0' o '1')
     
-    li $v0, 11          # Syscall 11: Imprimir car�cter [cite: 35]
+    li $v0, 11          # syscall 11: Imprimir caracter [cite: 35]
     syscall
     
     subi $t6, $t6, 1
@@ -113,15 +113,15 @@ fin_m_bin:
     
 loop_hex:
     beqz $t6, fin_m_hex
-    rol $t7, $t7, 4     # Rotar 4 bits a la izquierda
-    andi $t0, $t7, 0xF  # M�scara para obtener solo los 4 bits de la derecha
+    rol $t7, $t7, 4     # rotar 4 bits a la izquierda
+    andi $t0, $t7, 0xF  # mascara para obtener solo los 4 bits de la derecha
     
     ble $t0, 9, es_numero
-    addi $t0, $t0, 7    # Ajuste para letras (A-F) en la tabla ASCII
+    addi $t0, $t0, 7    # ajuste para letras (A-F) en la tabla ASCII
 es_numero:
-    addi $a0, $t0, 48   # Convertir a ASCII
+    addi $a0, $t0, 48   # convertir a ASCII
     
-    li $v0, 11          # Syscall 11: Imprimir car�cter
+    li $v0, 11          # syscall 11: Imprimir caracter
     syscall
     
     subi $t6, $t6, 1
@@ -130,14 +130,193 @@ es_numero:
 fin_m_hex:
 .end_macro
 
+# string a pivote
+# macro para convertir un string en base a 10 a un entero (complemento a 2)
+.macro m_Base10_A_Entero(%ptr_buffer, %reg_resultado)
+    li %reg_resultado, 0	# inicia el resultado en 0
+    li $t9, 10			# guarda la base 10 para las multiplicaciones
+    
+loop_b10:
+    lbu $t8, 0(%ptr_buffer)	# lee un caracter del string ingresado
+    beq $t8, 10, fin_b10	# si es un Enter (\n), termina de leer
+    beq $t8, 0, fin_b10		# si es el carácter nulo (fin), termina de leer
+    beq $t8, 43, sig_b10	# si es '+' lo ignora y pasa al siguiente
+    beq $t8, 45, sig_b10 	# si es '-' lo ignora y pasa al siguiente
+    blt $t8, 48, sig_b10	# si el caracter es menor a '0' lo ignora
+    bgt $t8, 57, sig_b10	# si el carácter es mayor a '9', es basura y lo ignora
+    # resultado = (resultado * 10) + nuevo digito
+    subi $t8, $t8, 48		# convierte de ASCII a digito real (0-9)
+    mul %reg_resultado, %reg_resultado, $t9	# multiplica el acumulado por 10
+    add %reg_resultado, %reg_resultado, $t8	# suma el nuevo digito al acumulado
+    
+sig_b10:
+    addi %ptr_buffer, %ptr_buffer, 1	# pasa al siguiente caracter
+    j loop_b10				# repite
+    
+fin_b10:
+.end_macro
+
+.macro m_Bin_A_Entero(%ptr_buffer, %reg_resultado)
+    li %reg_resultado, 0     # inicializa el resultado
+loop_b_read:
+    lbu $t8, 0(%ptr_buffer)  # carga caracter
+    beq $t8, 10, fin_b_read  # salida por Enter
+    beq $t8, 0, fin_b_read   # salida por caracter nulo
+    
+    blt $t8, 48, sig_b_read  # ignora caracteres menores a '0'
+    bgt $t8, 49, sig_b_read  # ignora caracteres mayores a '1' (es binario)
+    
+    subi $t8, $t8, 48        # convierte de ASCII a numero real (0 o 1)
+    sll %reg_resultado, %reg_resultado, 1   # multiplica por 2 desplazando los bits a la izquierda
+    add %reg_resultado, %reg_resultado, $t8 # suma el nuevo bit al final
+sig_b_read:
+    addi %ptr_buffer, %ptr_buffer, 1 # avanza al siguiente caracter
+    j loop_b_read
+fin_b_read:
+.end_macro
+
+.macro m_Hex_A_Entero(%ptr_buffer, %reg_resultado)
+    li %reg_resultado, 0     # inicia en 0
+loop_h_read:
+    lbu $t8, 0(%ptr_buffer)
+    beq $t8, 10, fin_h_read  # salida por enter
+    beq $t8, 0, fin_h_read   # salida por nulo
+    
+    beq $t8, 43, sig_h_read  # ignorar '+'
+    beq $t8, 45, sig_h_read  # ignorar '-'
+    
+    bge $t8, 48, chk_n       # verifica si es mayor o igual a '0'
+    j sig_h_read             # si es menor lo ignora
+chk_n:
+    ble $t8, 57, is_n        # si es menor/igual a '9', es un numero valido (0-9)
+    bge $t8, 65, chk_u       # si es mayor o igual a 'A', revisa letras mayusculas
+chk_u:
+    ble $t8, 70, is_u        # si es menor/igual a 'F', es una letra valida (A-F)
+    bge $t8, 97, chk_l       # si es mayor o igual a 'a', revisa minusculas
+chk_l:
+    ble $t8, 102, is_l       # si es menor/igual a 'f', es valida (a-f)
+    j sig_h_read             # si no cae en ningún rango, es basura y lo ignora
+is_n:
+    subi $t8, $t8, 48        # convierte ASCII '0'-'9' a valor 0-9
+    j add_h
+is_u:
+    subi $t8, $t8, 55        # convierte ASCII 'A'-'F' a valor 10-15
+    j add_h
+is_l:
+    subi $t8, $t8, 87        # convierte ASCII 'a'-'f' a valor 10-15
+add_h:
+    sll %reg_resultado, %reg_resultado, 4   # multiplica acumulado por 16 (desplaza 4 bits)
+    add %reg_resultado, %reg_resultado, $t8 # suma el valor hexadecimal
+sig_h_read:
+    addi %ptr_buffer, %ptr_buffer, 1
+    j loop_h_read
+fin_h_read:
+.end_macro
+
+.macro m_Octal_A_Entero(%ptr_buffer, %reg_resultado)
+    li %reg_resultado, 0
+loop_o_read:
+    lbu $t8, 0(%ptr_buffer)
+    beq $t8, 10, fin_o_read
+    beq $t8, 0, fin_o_read
+    
+    beq $t8, 43, sig_o_read  # ignorar '+'
+    beq $t8, 45, sig_o_read  # ignorar '-'
+    
+    blt $t8, 48, sig_o_read  # ignora menores a '0'
+    bgt $t8, 55, sig_o_read  # ignora mayores a '7' (solo llega hasta 7)
+    
+    subi $t8, $t8, 48        # ASCII a numero real (0-7)
+    sll %reg_resultado, %reg_resultado, 3   # multiplica acumulado por 8 (desplaza 3 bits)
+    add %reg_resultado, %reg_resultado, $t8 # suma el nuevo digito octal
+sig_o_read:
+    addi %ptr_buffer, %ptr_buffer, 1
+    j loop_o_read
+fin_o_read:
+.end_macro
+
+.macro m_ImprimirBase10(%reg_valor)
+    bgez %reg_valor, b10_pos # verifica si el numero es positivo (mayor o igual a cero)
+    
+    # si es negativo:
+    li $a0, 45               # carga el signo '-'
+    li $v0, 11               # imprime el signo
+    syscall
+    mul %reg_valor, %reg_valor, -1 # vuelve el numero positivo para hacer las divisiones
+    j b10_proc               # salta a procesarlo
+b10_pos:
+    # si es positivo:
+    li $a0, 43               # carga el signo '+'
+    li $v0, 11               # imprime el '+'
+    syscall
+b10_proc:
+    move $t0, %reg_valor     # copia el numero
+    li $t1, 10               # constante 10 (divisor)
+    li $t2, 0                # contador de digitos extraidos
+l_div10:
+    div $t0, $t1             # divide el numero entre 10
+    mflo $t0                 # el cociente se guarda para seguir dividiendolo
+    mfhi $t3                 # el residuo es el digito extraido 
+    
+    addi $sp, $sp, -4        # hace espacio de 4 bytes en la pila de memoria (Stack)
+    sw $t3, 0($sp)           # guarda el digito (residuo) en la pila
+    addi $t2, $t2, 1         # incrementa el contador de digitos
+    bgtz $t0, l_div10        # si el cociente es mayor a 0 repite la division
+
+l_imp10:
+    # bucle para sacar los digitos de la pila e imprimirlos (saldran al derecho)
+    lw $t3, 0($sp)           # recupera un digito de la pila
+    addi $sp, $sp, 4         # restaura la memoria de la pila
+    addi $a0, $t3, 48        # convierte el digito numerico a su ASCII respectivo
+    li $v0, 11               # syscall para imprimir el digito
+    syscall
+    subi $t2, $t2, 1         # disminuye el contador de digitos pendientes
+    bgtz $t2, l_imp10        # si quedan digitos repite
+.end_macro
+	 
+l.macro m_ImprimirOctal(%reg_valor)
+    # misma logica de Base 10, pero usando 8 como divisor
+    bgez %reg_valor, oct_pos
+    li $a0, 45               # signo '-'
+    li $v0, 11
+    syscall
+    mul %reg_valor, %reg_valor, -1 # lo vuelve positivo
+    j oct_proc
+oct_pos:
+    li $a0, 43               # signo '+'
+    li $v0, 11
+    syscall
+oct_proc:
+    move $t0, %reg_valor
+    li $t1, 8                # constante 8 (divisor base octal)
+    li $t2, 0                # contador de digitos en pila
+l_div8:
+    div $t0, $t1             # divide entre 8
+    mflo $t0                 # nuevo cociente
+    mfhi $t3                 # residuo (digito octal)
+    addi $sp, $sp, -4        # reserva memoria en pila
+    sw $t3, 0($sp)           # guarda digito en pila
+    addi $t2, $t2, 1         # suma al contador
+    bgtz $t0, l_div8         # si hay cociente repite
+l_imp8:
+    lw $t3, 0($sp)           # caca el digito de la pila
+    addi $sp, $sp, 4         # libera memoria
+    addi $a0, $t3, 48        # convierte a ASCII
+    li $v0, 11               # imprime el numero octal
+    syscall
+    subi $t2, $t2, 1         # resta contador
+    bgtz $t2, l_imp8         # repite hasta vaciar la pila
+.end_macro
+	
+	
 .data
 	Mensaje1: .asciiz "\nQue formato numerico quieres usar:\n(a=decimal empaquetado, b=Complemento a 2, c=Base 10, d=Octal, e=Hexadecimal): "
 	Mensaje2:  .asciiz "Que formato quiere convertirlo:  (decimal empaquetado =a,  Complemento a 2=b, Base 10 = c, Octal = d y Hexadecimal =e): "
 	Num1: .asciiz "Introduce el número: " 
 	Num2: .asciiz "\nEl numero convertido es: "
-	Buffer1: .space 20 #Almacena la primera opción
-	Buffer2: .space 20 #Almacena la segunda opción
-	BufferCon: .space 64 #para el número a convertir
+	Buffer1: .space 20 #Almacena la primera opcion
+	Buffer2: .space 20 #Almacena la segunda opcion
+	BufferCon: .space 64 #para el numero a convertir
 .text
 main:
 
@@ -150,15 +329,76 @@ main:
     imprimir_str(Mensaje2)
     leer_str(Buffer1, 20)
    
-   #Pedir el NÚMERO a convertir
+   #Pedir el NUMERO a convertir
     imprimir_str(Num1)
     leer_str(BufferCon, 64)
     
+# transfromacion
+#string a pivote
+    la $t0, Buffer1              # carga la direccion de Buffer1
+    lbu $t1, 0($t0)              # lee la primera letra del buffer de origen ('a', 'b', etc.)
+    la $a1, BufferCon            # carga la direccion donde esta el numero 
+    
+    # compara la letra origen y salta a la seccion correcta
+    beq $t1, 'b', origen_binario
+    beq $t1, 'c', origen_base10
+    beq $t1, 'd', origen_octal
+    beq $t1, 'e', origen_hexadecimal
+    j procesar_destino           # si es 'a' o erroneo va directo al destino para evitar fallas
 
-#Lee el numero que vas a convertir
-   
-   #Muestra el resultado
-    imprimir_str(Num2)
+origen_binario:
+    m_Bin_A_Entero($a1, $s0)     # convierte de string binario y deja el numero en $s0
+    j procesar_destino           # termino va al destino
+
+origen_base10:
+    m_ProcesarSigno($a1, $s1)    # detecta el signo (+ o -) guarda estado en $s1
+    m_Base10_A_Entero($a1, $s0)  # convierte el string a numero entero y lo guarda en $s0
+    beqz $s1, procesar_destino   # si $s1 es 0 (positivo), salta a destino
+    mul $s0, $s0, -1             # si era negativo multiplica por -1 el numero final
+    j procesar_destino           # termino va al destino
+
+origen_octal:
+    m_ProcesarSigno($a1, $s1)    # detecta signo
+    m_Octal_A_Entero($a1, $s0)   # convierte string octal a numero en $s0
+    beqz $s1, procesar_destino   # si es positivo avanza
+    mul $s0, $s0, -1             # splica negativo
+    j procesar_destino
+
+origen_hexadecimal:
+    m_ProcesarSigno($a1, $s1)    # detecta signo
+    m_Hex_A_Entero($a1, $s0)     # convierte string hexa a numero en $s0
+    beqz $s1, procesar_destino   # si es positivo avanza
+    mul $s0, $s0, -1             # aplica negativo
+    j procesar_destino
+
+   procesar_destino:
+    imprimir_str(Num2)           # imprime "El numero convertido es: "
+
+    la $t0, Buffer2              # carga la direccion de memoria de Buffer2
+    lbu $t1, 0($t0)              # lee la letra ingresada como destino
+
+    # evalua la letra de destino para usar la macro de impresion correcta
+    beq $t1, 'b', destino_binario
+    beq $t1, 'c', destino_base10
+    beq $t1, 'd', destino_octal
+    beq $t1, 'e', destino_hexadecimal
+    j salir_programa             # si hubo un error o letra no valida sale del programa
+
+destino_binario:
+    m_ImprimirBinario($s0)       # manda el registro pivote a la macro binaria
+    j salir_programa             # finaliza
+
+destino_base10:
+    m_ImprimirBase10($s0)        # manda el registro pivote a  macro Base 10
+    j salir_programa             # finaliza
+
+destino_octal:
+    m_ImprimirOctal($s0)         # manda el registro pivote a macro Octal
+    j salir_programa             # finaliza
+
+destino_hexadecimal:
+    m_ImprimirHex($s0)           # manda el pivote a la macro hexadecimal 
+    j salir_programa             # finaliza
     
     # Sale del programa
     li $v0, 10
