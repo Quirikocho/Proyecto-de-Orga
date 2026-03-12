@@ -36,7 +36,6 @@ fin_macro:
     addi %reg_valor, %reg_valor, 1 # sumar 1
 .end_macro
 
-
 .macro m_ConvertirFraccion(%ptr_reg, %reg_res_frac)
     # %ptr_reg: Puntero al string despues del '.'
     # %reg_res_frac: Registro donde guardaremos los 8 bits
@@ -104,6 +103,28 @@ loop_bin:
 fin_m_bin:
 .end_macro
 
+.macro m_ImprimirFraccionBinaria(%reg_frac)
+    li $v0, 11
+    li $a0, 46              # Carga el ASCII del punto '.'
+    syscall                 # Imprime el punto decimal
+
+    li $t6, 8               # Vamos a imprimir exactamente 8 bits 
+    move $t7, %reg_frac 
+    sll $t7, $t7, 24        # Movemos los 8 bits al inicio (MSB) para imprimirlos de izq a der
+
+loop_frac_bin:
+    beqz $t6, fin_frac_bin
+    rol $t7, $t7, 1         # Rota el bit hacia la derecha
+    andi $a0, $t7, 1        # Aísla el bit
+    addi $a0, $a0, 48       # Convierte a ASCII ('0' o '1')
+    
+    li $v0, 11
+    syscall
+    
+    subi $t6, $t6, 1
+    j loop_frac_bin
+fin_frac_bin:
+.end_macro
 
 .macro m_ImprimirHex(%reg_datos)
     li $t6, 8           # 8 grupos de 4 bits = 32 bits
@@ -136,8 +157,9 @@ fin_m_hex:
     
 loop_b10:
     lbu $t8, 0(%ptr_buffer)	# lee un caracter del string ingresado
-    beq $t8, 10, fin_b10	# si es un Enter (\n), termina de leer
+    beq $t8, 10, fin_b10	# si es un Enter (\n), termina de 
     beq $t8, 0, fin_b10		# si es el carácter nulo (fin), termina de leer
+    beq $t8, 46, fin_b10
     beq $t8, 43, sig_b10	# si es '+' lo ignora y pasa al siguiente
     beq $t8, 45, sig_b10 	# si es '-' lo ignora y pasa al siguiente
     blt $t8, 48, sig_b10	# si el caracter es menor a '0' lo ignora
@@ -153,6 +175,7 @@ sig_b10:
     
 fin_b10:
 .end_macro
+
 
 .macro m_Bin_A_Entero(%ptr_buffer, %reg_resultado)
     li %reg_resultado, 0     # inicializa el resultado
@@ -272,7 +295,7 @@ l_imp10:
     bgtz $t2, l_imp10        # si quedan digitos repite
 .end_macro
 	 
-l.macro m_ImprimirOctal(%reg_valor)
+.macro m_ImprimirOctal(%reg_valor)
     # misma logica de Base 10, pero usando 8 como divisor
     bgez %reg_valor, oct_pos
     li $a0, 45               # signo '-'
@@ -325,7 +348,7 @@ main:
 
 #Muestra el mensaje 2/ Pide el formato destino
     imprimir_str(Mensaje2)
-    leer_str(Buffer1, 20)
+    leer_str(Buffer2, 20)
    
    #Pedir el NUMERO a convertir
     imprimir_str(Num1)
@@ -350,11 +373,19 @@ origen_binario:
 
 origen_base10:
     m_ProcesarSigno($a1, $s1)    # detecta el signo (+ o -) guarda estado en $s1
-    m_Base10_A_Entero($a1, $s0)  # convierte el string a numero entero y lo guarda en $s0
-    beqz $s1, procesar_destino   # si $s1 es 0 (positivo), salta a destino
-    mul $s0, $s0, -1             # si era negativo multiplica por -1 el numero final
-    j procesar_destino           # termino va al destino
+    m_Base10_A_Entero($a1, $s0)  # convierte la parte entera y se detiene si hay un '.'
+    
+    li $s2, 0                    # inicializamos la fracción en 0 por defecto
+    lbu $t0, 0($a1)              # leemos dónde se detuvo el puntero
+    bne $t0, 46, saltar_fraccion # si NO es un '.', saltamos la conversión fraccionaria
+    
+    addi $a1, $a1, 1             # si es '.', avanzamos el puntero 1 espacio para saltarlo
+    m_ConvertirFraccion($a1, $s2)# llamamos a tu macro. Los 8 bits se guardan en $s2
 
+saltar_fraccion:
+    beqz $s1, procesar_destino   # si $s1 es 0 (positivo), salta a destino
+    mul $s0, $s0, -1             # si era negativo multiplica por -1 el numero entero final
+    j procesar_destino
 origen_octal:
     m_ProcesarSigno($a1, $s1)    # detecta signo
     m_Octal_A_Entero($a1, $s0)   # convierte string octal a numero en $s0
@@ -376,14 +407,51 @@ origen_hexadecimal:
     lbu $t1, 0($t0)              # lee la letra ingresada como destino
 
     # evalua la letra de destino para usar la macro de impresion correcta
+    beq $t1, 'a', destino_empaquetado
     beq $t1, 'b', destino_binario
     beq $t1, 'c', destino_base10
     beq $t1, 'd', destino_octal
     beq $t1, 'e', destino_hexadecimal
     j salir_programa             # si hubo un error o letra no valida sale del programa
-
+    
+.macro m_ImprimirEmpaquetado(%reg_valor)
+    move $t0, %reg_valor
+    li $t1, 0           # Aquí armaremos el número BCD empaquetado
+    li $t2, 12          # 12 equivale a 'C' (1100 en binario), que es el signo POSITIVO
+    
+    bgez $t0, emp_pos   # Si es positivo, saltamos
+    li $t2, 13          # 13 equivale a 'D' (1101 en binario), que es el signo NEGATIVO
+    mul $t0, $t0, -1    # Volvemos el número positivo para poder extraer sus dígitos
+    
+emp_pos:
+    move $t1, $t2       # Colocamos el nibble (4 bits) del signo al final del registro
+    li $t3, 4           # Contador de desplazamiento (arranca en 4 para no pisar el signo)
+    li $t4, 10          # Divisor para extraer dígitos base 10
+    
+loop_emp:
+    beqz $t0, fin_emp_build # Si ya no quedan dígitos que procesar, terminamos
+    div $t0, $t4
+    mflo $t0            # Guardamos el cociente
+    mfhi $t5            # El residuo es el dígito actual (0-9)
+    
+    sllv $t5, $t5, $t3  # Desplazamos los 4 bits del dígito a su posición correcta
+    or $t1, $t1, $t5    # Los fusionamos en nuestro registro BCD final
+    
+    addi $t3, $t3, 4    # Aumentamos el desplazamiento en 4 bits para el próximo dígito
+    j loop_emp
+    
+fin_emp_build:
+    # Ahora en $t1 tenemos los 32 bits ordenados en formato Decimal Empaquetado.
+    # Reutilizamos tu macro binaria para imprimir los 32 ceros y unos en pantalla.
+    m_ImprimirBinario($t1)
+.end_macro
 destino_binario:
-    m_ImprimirBinario($s0)       # manda el registro pivote a la macro binaria
+    m_ImprimirBinario($s0)  # manda el registro pivote a la macro binaria
+    m_ImprimirFraccionBinaria($s2)       
+    j salir_programa             # finaliza
+    
+destino_empaquetado:
+    m_ImprimirEmpaquetado($s0)   # Llama a la nueva macro
     j salir_programa             # finaliza
 
 destino_base10:
@@ -399,5 +467,6 @@ destino_hexadecimal:
     j salir_programa             # finaliza
     
     # Sale del programa
+salir_programa:
     li $v0, 10
     syscall
