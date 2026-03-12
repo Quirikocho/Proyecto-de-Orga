@@ -12,7 +12,6 @@
     syscall
 .end_macro
 
-
 .macro m_ProcesarSigno(%ptr_reg, %signo_reg)
     lbu $t0, 0(%ptr_reg)    # Cargar el primer byte
     li %signo_reg, 0        # Por defecto es positivo (0)
@@ -31,7 +30,6 @@ es_positivo:
     
 fin_macro:
 .end_macro
-
 
 .macro m_AplicarComplemento2(%reg_valor)
     not %reg_valor, %reg_valor  # Invertir todos los bits (Bitwise NOT)
