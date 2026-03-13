@@ -333,6 +333,7 @@ l_imp8:
 .data
 	Mensaje1: .asciiz "\nQue formato numerico quieres usar:\n(a=decimal empaquetado, b=Complemento a 2, c=Base 10, d=Octal, e=Hexadecimal): "
 	Mensaje2:  .asciiz "Que formato quiere convertirlo:  (decimal empaquetado =a,  Complemento a 2=b, Base 10 = c, Octal = d y Hexadecimal =e): "
+	MensajeError: .asciiz "\n[!] ERROR: El formato de origen y destino no pueden ser iguales. Intente de nuevo.\n" # <-- NUEVO MENSAJE
 	Num1: .asciiz "Introduce el número: " 
 	Num2: .asciiz "\nEl numero convertido es: "
 	Buffer1: .space 20 #Almacena la primera opcion
@@ -349,6 +350,16 @@ main:
 #Muestra el mensaje 2/ Pide el formato destino
     imprimir_str(Mensaje2)
     leer_str(Buffer2, 20)
+    
+    # Valida si el formato numerico es el mismo
+    la $t0, Buffer1              # Carga la dirección de Buffer1
+    lbu $t1, 0($t0)              # Lee el primer carácter del origen (ej: 'a')
+    
+    la $t2, Buffer2              # Carga la dirección de Buffer2
+    lbu $t3, 0($t2)              # Lee el primer carácter del destino (ej: 'a')
+    
+    beq $t1, $t3, error_iguales  # Si son iguales, salta a la etiqueta de error
+# ---> FIN DE VALIDACIÓN <---
    
    #Pedir el NUMERO a convertir
     imprimir_str(Num1)
@@ -465,6 +476,10 @@ destino_octal:
 destino_hexadecimal:
     m_ImprimirHex($s0)           # manda el pivote a la macro hexadecimal 
     j salir_programa             # finaliza
+    
+error_iguales:
+    imprimir_str(MensajeError)   # Imprime el aviso
+    j main
     
     # Sale del programa
 salir_programa:
