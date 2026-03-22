@@ -127,25 +127,34 @@ fin_frac_bin:
 .end_macro
 
 .macro m_ImprimirHex(%reg_datos)
-    li $t6, 8           # 8 grupos de 4 bits = 32 bits
     move $t7, %reg_datos
-    
+    # Procesar el signo
+    bgez $t7, hex_pos
+    li $a0, 45          # Imprimir '-'
+    li $v0, 11
+    syscall
+    mul $t7, $t7, -1    # Volver positivo para imprimir la magnitud
+    j hex_proc
+hex_pos:
+    li $a0, 43          # Imprimir '+'
+    li $v0, 11
+    syscall
+hex_proc:
+    li $t6, 8           # 8 caracteres (32 bits)
 loop_hex:
     beqz $t6, fin_m_hex
-    rol $t7, $t7, 4     # rotar 4 bits a la izquierda
-    andi $t0, $t7, 0xF  # mascara para obtener solo los 4 bits de la derecha
+    rol $t7, $t7, 4    
+    andi $t0, $t7, 0xF  
     
     ble $t0, 9, es_numero
-    addi $t0, $t0, 7    # ajuste para letras (A-F) en la tabla ASCII
+    addi $t0, $t0, 7   
 es_numero:
-    addi $a0, $t0, 48   # convertir a ASCII
-    
-    li $v0, 11          # syscall 11: Imprimir caracter
+    addi $a0, $t0, 48  
+    li $v0, 11         
     syscall
     
     subi $t6, $t6, 1
     j loop_hex
-    
 fin_m_hex:
 .end_macro
 
@@ -256,6 +265,50 @@ sig_o_read:
 fin_o_read:
 .end_macro
 
+.macro m_Emp_A_Entero(%ptr_buffer, %reg_resultado, %reg_signo)
+    # 1. Leemos el string de 32 caracteres (ignorando espacios)
+    li $t0, 0               # $t0 guardara los 32 bits puros
+loop_read_emp:
+    lbu $t8, 0(%ptr_buffer)
+    beq $t8, 10, fin_read_emp
+    beq $t8, 0, fin_read_emp
+    
+    blt $t8, 48, sig_read_emp   # Si es un espacio o basura, lo ignora
+    bgt $t8, 49, sig_read_emp
+    
+    subi $t8, $t8, 48
+    sll $t0, $t0, 1         # Desplaza a la izquierda
+    add $t0, $t0, $t8       # Inserta el bit
+sig_read_emp:
+    addi %ptr_buffer, %ptr_buffer, 1
+    j loop_read_emp
+    
+fin_read_emp:
+    # 2. Extraer el signo (ultimos 4 bits)
+    andi $t1, $t0, 0xF      # Mascara para sacar el ultimo nibble
+    li %reg_signo, 0        # Por defecto positivo (0)
+    beq $t1, 12, es_pos_emp # Si es 12 ('C' o 1100), es positivo
+    li %reg_signo, 1        # Si es 13 ('D' o 1101), es negativo
+es_pos_emp:
+    srl $t0, $t0, 4         # Desplazamos 4 bits a la derecha para botar el signo
+    
+    # 3. Extraer los digitos BCD
+    li %reg_resultado, 0    # Inicia el acumulador del pivote
+    li $t2, 1               # Multiplicador posicional (1, 10, 100...)
+    
+loop_calc_emp:
+    beqz $t0, fin_calc_emp  # Si ya no quedan bits, terminamos
+    
+    andi $t4, $t0, 0xF      # Extraemos el digito actual (0-9)
+    mul $t4, $t4, $t2       # Lo multiplicamos por su posicion (ej: 5 * 10 = 50)
+    add %reg_resultado, %reg_resultado, $t4 # Lo sumamos al pivote
+    
+    mul $t2, $t2, 10        # El proximo digito valdra x10
+    srl $t0, $t0, 4         # Desplazamos 4 bits para pasar al siguiente digito
+    j loop_calc_emp
+    
+fin_calc_emp:
+.end_macro
 .macro m_ImprimirBase10(%reg_valor)
     bgez %reg_valor, b10_pos # verifica si el numero es positivo (mayor o igual a cero)
     
@@ -328,103 +381,7 @@ l_imp8:
     subi $t2, $t2, 1         # resta contador
     bgtz $t2, l_imp8         # repite hasta vaciar la pila
 .end_macro
-	
-	
-.data
-	Mensaje1: .asciiz "\nQue formato numerico quieres usar:\n(a=decimal empaquetado, b=Complemento a 2, c=Base 10, d=Octal, e=Hexadecimal): "
-	Mensaje2:  .asciiz "Que formato quiere convertirlo:  (decimal empaquetado =a,  Complemento a 2=b, Base 10 = c, Octal = d y Hexadecimal =e): "
-	MensajeError: .asciiz "\n[!] ERROR: El formato de origen y destino no pueden ser iguales. Intente de nuevo.\n" # <-- NUEVO MENSAJE
-	Num1: .asciiz "Introduce el número: " 
-	Num2: .asciiz "\nEl numero convertido es: "
-	Buffer1: .space 20 #Almacena la primera opcion
-	Buffer2: .space 20 #Almacena la segunda opcion
-	BufferCon: .space 64 #para el numero a convertir
-.text
-main:
 
-#Muestra el mensaje1/ Pidiendo el formato de origen
-    imprimir_str(Mensaje1)
-    leer_str(Buffer1, 20)
-  
-
-#Muestra el mensaje 2/ Pide el formato destino
-    imprimir_str(Mensaje2)
-    leer_str(Buffer2, 20)
-    
-    # Valida si el formato numerico es el mismo
-    la $t0, Buffer1              # Carga la dirección de Buffer1
-    lbu $t1, 0($t0)              # Lee el primer carácter del origen (ej: 'a')
-    
-    la $t2, Buffer2              # Carga la dirección de Buffer2
-    lbu $t3, 0($t2)              # Lee el primer carácter del destino (ej: 'a')
-    
-    beq $t1, $t3, error_iguales  # Si son iguales, salta a la etiqueta de error
-# ---> FIN DE VALIDACIÓN <---
-   
-   #Pedir el NUMERO a convertir
-    imprimir_str(Num1)
-    leer_str(BufferCon, 64)
-    
-# transfromacion
-#string a pivote
-    la $t0, Buffer1              # carga la direccion de Buffer1
-    lbu $t1, 0($t0)              # lee la primera letra del buffer de origen ('a', 'b', etc.)
-    la $a1, BufferCon            # carga la direccion donde esta el numero 
-    
-    # compara la letra origen y salta a la seccion correcta
-    beq $t1, 'b', origen_binario
-    beq $t1, 'c', origen_base10
-    beq $t1, 'd', origen_octal
-    beq $t1, 'e', origen_hexadecimal
-    j procesar_destino           # si es 'a' o erroneo va directo al destino para evitar fallas
-
-origen_binario:
-    m_Bin_A_Entero($a1, $s0)     # convierte de string binario y deja el numero en $s0
-    j procesar_destino           # termino va al destino
-
-origen_base10:
-    m_ProcesarSigno($a1, $s1)    # detecta el signo (+ o -) guarda estado en $s1
-    m_Base10_A_Entero($a1, $s0)  # convierte la parte entera y se detiene si hay un '.'
-    
-    li $s2, 0                    # inicializamos la fracción en 0 por defecto
-    lbu $t0, 0($a1)              # leemos dónde se detuvo el puntero
-    bne $t0, 46, saltar_fraccion # si NO es un '.', saltamos la conversión fraccionaria
-    
-    addi $a1, $a1, 1             # si es '.', avanzamos el puntero 1 espacio para saltarlo
-    m_ConvertirFraccion($a1, $s2)# llamamos a tu macro. Los 8 bits se guardan en $s2
-
-saltar_fraccion:
-    beqz $s1, procesar_destino   # si $s1 es 0 (positivo), salta a destino
-    mul $s0, $s0, -1             # si era negativo multiplica por -1 el numero entero final
-    j procesar_destino
-origen_octal:
-    m_ProcesarSigno($a1, $s1)    # detecta signo
-    m_Octal_A_Entero($a1, $s0)   # convierte string octal a numero en $s0
-    beqz $s1, procesar_destino   # si es positivo avanza
-    mul $s0, $s0, -1             # splica negativo
-    j procesar_destino
-
-origen_hexadecimal:
-    m_ProcesarSigno($a1, $s1)    # detecta signo
-    m_Hex_A_Entero($a1, $s0)     # convierte string hexa a numero en $s0
-    beqz $s1, procesar_destino   # si es positivo avanza
-    mul $s0, $s0, -1             # aplica negativo
-    j procesar_destino
-
-   procesar_destino:
-    imprimir_str(Num2)           # imprime "El numero convertido es: "
-
-    la $t0, Buffer2              # carga la direccion de memoria de Buffer2
-    lbu $t1, 0($t0)              # lee la letra ingresada como destino
-
-    # evalua la letra de destino para usar la macro de impresion correcta
-    beq $t1, 'a', destino_empaquetado
-    beq $t1, 'b', destino_binario
-    beq $t1, 'c', destino_base10
-    beq $t1, 'd', destino_octal
-    beq $t1, 'e', destino_hexadecimal
-    j salir_programa             # si hubo un error o letra no valida sale del programa
-    
 .macro m_ImprimirEmpaquetado(%reg_valor)
     move $t0, %reg_valor
     li $t1, 0           # Aquí armaremos el número BCD empaquetado
@@ -456,8 +413,116 @@ fin_emp_build:
     # Reutilizamos tu macro binaria para imprimir los 32 ceros y unos en pantalla.
     m_ImprimirBinario($t1)
 .end_macro
+
+
+.data
+	Mensaje1: .asciiz "\nQue formato numerico quieres usar:\n(a=decimal empaquetado, b=Complemento a 2, c=Base 10, d=Octal, e=Hexadecimal): "
+	Mensaje2:  .asciiz "Que formato quiere convertirlo:  (decimal empaquetado =a,  Complemento a 2=b, Base 10 = c, Octal = d y Hexadecimal =e): "
+	MensajeError: .asciiz "\n[!] ERROR: El formato de origen y destino no pueden ser iguales. Intente de nuevo.\n" # <-- NUEVO MENSAJE
+	Num1: .asciiz "Introduce el número: " 
+	Num2: .asciiz "\nEl numero convertido es: "
+	Buffer1: .space 20 #Almacena la primera opcion
+	Buffer2: .space 20 #Almacena la segunda opcion
+	BufferCon: .space 64 #para el numero a convertir
+.text
+main:
+  	 li $s2, 0
+#Muestra el mensaje1/ Pidiendo el formato de origen
+    imprimir_str(Mensaje1)
+    leer_str(Buffer1, 20)
+  
+
+#Muestra el mensaje 2/ Pide el formato destino
+    imprimir_str(Mensaje2)
+    leer_str(Buffer2, 20)
+    
+    # Valida si el formato numerico es el mismo
+    la $t0, Buffer1             
+    lbu $t1, 0($t0)            
+    
+    la $t2, Buffer2              
+    lbu $t3, 0($t2)             
+    
+    beq $t1, $t3, error_iguales  # Si son iguales, salta a la etiqueta de error
+# ---> FIN DE VALIDACIÓN <---
+   
+   #Pedir el NUMERO a convertir
+    imprimir_str(Num1)
+    leer_str(BufferCon, 64)
+    
+# transfromacion
+#string a pivote
+    la $t0, Buffer1              # carga la direccion de Buffer1
+    lbu $t1, 0($t0)              # lee la primera letra del buffer de origen ('a', 'b', etc.)
+    la $a1, BufferCon            # carga la direccion donde esta el numero 
+    
+    # compara la letra origen y salta a la seccion correcta
+    beq $t1, 'a', origen_empaquetado
+    beq $t1, 'b', origen_binario
+    beq $t1, 'c', origen_base10
+    beq $t1, 'd', origen_octal
+    beq $t1, 'e', origen_hexadecimal
+    j procesar_destino           # si es 'a' o erroneo va directo al destino para evitar fallas
+
+origen_empaquetado:
+    m_Emp_A_Entero($a1, $s0, $s1) # Llama a la macro y guarda numero en $s0 y signo en $s1
+    beqz $s1, procesar_destino    # Si es positivo, ve al destino
+    mul $s0, $s0, -1              # Si es negativo, vuelve el pivote negativo
+    j procesar_destino
+
+
+origen_binario:
+    m_Bin_A_Entero($a1, $s0)     # convierte de string binario y deja el numero en $s0
+    
+    j procesar_destino           # termino va al destino
+
+origen_base10:
+    m_ProcesarSigno($a1, $s1)    # detecta el signo (+ o -) guarda estado en $s1
+    m_Base10_A_Entero($a1, $s0)  # convierte la parte entera y se detiene si hay un '.'
+    
+    li $s2, 0                    # inicializamos la fracción en 0 por defecto
+    lbu $t0, 0($a1)              # leemos dónde se detuvo el puntero
+    bne $t0, 46, saltar_fraccion # si NO es un '.', saltamos la conversión fraccionaria
+    
+    addi $a1, $a1, 1             # si es '.', avanzamos el puntero 1 espacio para saltarlo
+    m_ConvertirFraccion($a1, $s2)# llamamos a tu macro. Los 8 bits se guardan en $s2
+
+saltar_fraccion:
+    beqz $s1, procesar_destino   # si $s1 es 0 (positivo), salta a destino
+    mul $s0, $s0, -1             # si era negativo multiplica por -1 el numero entero final
+    j procesar_destino
+    
+origen_octal:
+    m_ProcesarSigno($a1, $s1)    # detecta signo
+    m_Octal_A_Entero($a1, $s0)   # convierte string octal a numero en $s0
+    beqz $s1, procesar_destino   # si es positivo avanza
+    mul $s0, $s0, -1             # splica negativo
+    j procesar_destino
+
+origen_hexadecimal:
+    m_ProcesarSigno($a1, $s1)    # detecta signo
+    m_Hex_A_Entero($a1, $s0)     # convierte string hexa a numero en $s0
+    beqz $s1, procesar_destino   # si es positivo avanza
+    mul $s0, $s0, -1             # aplica negativo
+    j procesar_destino
+
+   procesar_destino:
+    imprimir_str(Num2)           # imprime "El numero convertido es: "
+
+    la $t0, Buffer2              # carga la direccion de memoria de Buffer2
+    lbu $t1, 0($t0)              # lee la letra ingresada como destino
+
+    # evalua la letra de destino para usar la macro de impresion correcta
+    beq $t1, 'a', destino_empaquetado
+    beq $t1, 'b', destino_binario
+    beq $t1, 'c', destino_base10
+    beq $t1, 'd', destino_octal
+    beq $t1, 'e', destino_hexadecimal
+    j salir_programa             # si hubo un error o letra no valida sale del programa
+    
 destino_binario:
     m_ImprimirBinario($s0)  # manda el registro pivote a la macro binaria
+    beqz $s2, salir_programa
     m_ImprimirFraccionBinaria($s2)       
     j salir_programa             # finaliza
     
